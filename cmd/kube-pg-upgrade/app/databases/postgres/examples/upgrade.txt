@@ -1,0 +1,2 @@
+# run pg_upgrade for a statefulset pod
+kube-pg-upgrade postgres upgrade database-postgresql --target-version=15 --current-version=11

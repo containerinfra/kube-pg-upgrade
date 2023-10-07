@@ -1,0 +1,27 @@
+builds:
+  - id: "kube-pg-upgrade"
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+before:
+  hooks:
+    - go mod tidy
+    - ./scripts/shell-completions.sh
+
+archives:
+  - files:
+      - completions/*
+
+# Documentation: https://goreleaser.com/customization/changelog/
+changelog:
+  use: github
+
+checksum:
+  name_template: 'checksums.txt'
