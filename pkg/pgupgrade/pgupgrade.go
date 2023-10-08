@@ -2,6 +2,7 @@ package pgupgrade
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 
 	v1 "k8s.io/api/core/v1"
@@ -18,6 +19,52 @@ import (
 	"github.com/containerinfra/kube-pg-upgrade/pkg/ptrs"
 )
 
+//go:embed scripts/prepare.sh
+var upgradePrepareScript string
+
+//go:embed scripts/posthook.sh
+var postHookScript string
+
+const (
+	DefaultPostgresInitDBUser = "postgres"
+)
+
+type PGUpgradeSettings struct {
+	UpgradeImage string
+
+	InitDBArgs string
+	DiskSize   string
+
+	CurrentPostgresVersion string
+	TargetPostgresVersion  string
+	PostgresContainerName  string
+
+	PVCName    string
+	InitDBUser string
+
+	SourcePVCName string
+	TargetPVCName string
+	SubPath       string
+}
+
+func (s *PGUpgradeSettings) GetUpgradeImage() string {
+	return fmt.Sprintf("%s:%s-to-%s", s.UpgradeImage, s.CurrentPostgresVersion, s.TargetPostgresVersion)
+}
+
+func (s *PGUpgradeSettings) GetInitDBUser() string {
+	if s.InitDBUser == "" {
+		return DefaultPostgresInitDBUser
+	}
+	return s.InitDBUser
+}
+
+func (s *PGUpgradeSettings) Validate() error {
+	if s.TargetPostgresVersion == "" {
+		return fmt.Errorf("missing target postgres version")
+	}
+	return nil
+}
+
 const (
 	PostHookScriptFileName = "posthook.sh"
 	PrepareScriptFileName  = "prepare.sh"
@@ -32,20 +79,6 @@ type JobActions struct {
 	PostHookContainer v1.Container
 }
 
-// Truncate returns the first n runes of s.
-func Truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	for i := range s {
-		if n == 0 {
-			return s[:i]
-		}
-		n--
-	}
-	return s
-}
-
 func RunPGDataMigration(ctx context.Context, k8sClient *kubernetes.Clientset, namespace, sourcePersistenVolumeName, targetPVCName, storageClassName string, newSize string, jobaction JobActions) error {
 	upgradePodName := Truncate(jobaction.Name+sourcePersistenVolumeName, 63)
 	upgradeTargetPersistentVolumeTempName := Truncate("tmp-"+sourcePersistenVolumeName, 63)
@@ -54,7 +87,7 @@ func RunPGDataMigration(ctx context.Context, k8sClient *kubernetes.Clientset, na
 		return err
 	}
 
-	pvc, err := kubevolumes.GetPersistentVolumeClaimAndCheckForVolumes(ctx, k8sClient, sourcePersistenVolumeName, namespace)
+	pvc, err := kubevolumes.GetPersistentVolumeClaimAndWaitForVolume(ctx, k8sClient, namespace, sourcePersistenVolumeName)
 	if err != nil {
 		return err
 	}
@@ -197,7 +230,7 @@ func RunPGDataMigration(ctx context.Context, k8sClient *kubernetes.Clientset, na
 }
 
 func validatePVCCreationCompleted(ctx context.Context, k8sClient *kubernetes.Clientset, targetPVCName string, namespace string, tmpPVC *v1.PersistentVolumeClaim, storageClassName string, sourcePersistenVolumeName string, pvc *v1.PersistentVolumeClaim) error {
-	finalPVC, err := kubevolumes.GetPersistentVolumeClaimAndCheckForVolumes(ctx, k8sClient, targetPVCName, namespace)
+	finalPVC, err := kubevolumes.GetPersistentVolumeClaimAndWaitForVolume(ctx, k8sClient, namespace, targetPVCName)
 	if err != nil {
 		return fmt.Errorf("failed to get new persistent volume claim%q: %w", targetPVCName, err)
 	}
@@ -264,4 +297,18 @@ func RetryAllErrorsFn(ctx context.Context) func(err error) bool {
 	return func(err error) bool {
 		return ctx.Err() == nil
 	}
+}
+
+// Truncate returns the first n runes of s.
+func Truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for i := range s {
+		if n == 0 {
+			return s[:i]
+		}
+		n--
+	}
+	return s
 }

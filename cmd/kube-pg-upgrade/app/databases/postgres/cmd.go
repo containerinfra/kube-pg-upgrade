@@ -7,16 +7,17 @@ import (
 // NewPostgresCmd returns cobra.Command to run the kube-pg-upgrade databases postgres subcommand
 func NewPostgresCmd() *cobra.Command {
 	cmds := &cobra.Command{
-		Use:     "postgres",
-		Short:   "Perform actions on a PostgreSQL running in Kubernetes",
-		Long:    "Perform actions on a PostgreSQL running in Kubernetes",
-		Aliases: []string{"pg", "pgsql", "postgresql"},
+		Use:     "pgupgrade",
+		Short:   "Perform a PG upgrade PostgreSQL running in Kubernetes",
+		Long:    "Perform a PG upgrade PostgreSQL running in Kubernetes",
+		Aliases: []string{"pg_upgrade", "pg-upgrade", "upgrade"},
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			return nil
 		},
 	}
 
 	cmds.ResetFlags()
-	cmds.AddCommand(NewUpgradePostgresCmd(nil))
+	cmds.AddCommand(NewUpgradePostgresStatefulSetCmd(nil))
+	cmds.AddCommand(NewUpgradePostgresPVCCmd(nil))
 	return cmds
 }
