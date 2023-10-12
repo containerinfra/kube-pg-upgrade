@@ -127,6 +127,8 @@ func NewUpgradePostgresStatefulSetCmd(runOptions *postgresPGUpgradeOptions) *cob
 
 	AddPostgresStatefulSetUpgradeFlags(cmd.Flags(), runOptions)
 
+	cmd.MarkFlagRequired("version")
+
 	return cmd
 }
 
@@ -178,5 +180,7 @@ func NewUpgradePostgresPVCCmd(runOptions *postgresPGUpgradeOptions) *cobra.Comma
 
 	AddPostgresPVCUpgradeFlags(cmd.Flags(), runOptions)
 
+	cmd.MarkFlagRequired("version")
+	cmd.MarkFlagRequired("current-version")
 	return cmd
 }

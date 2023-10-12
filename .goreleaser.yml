@@ -2,6 +2,7 @@ builds:
   - id: "kube-pg-upgrade"
     env:
       - CGO_ENABLED=0
+    mod_timestamp: '{{ .CommitTimestamp }}'
     goos:
       - linux
       - darwin
@@ -16,8 +17,13 @@ before:
     - ./scripts/shell-completions.sh
 
 archives:
+  - format: zip
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
   - files:
       - completions/*
+
+release:
+  draft: false
 
 # Documentation: https://goreleaser.com/customization/changelog/
 changelog:

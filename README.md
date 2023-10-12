@@ -12,8 +12,8 @@ This solution is for anyone that runs the Bitnami or Docker Hub library Postgres
 
 ## Important notes
 
-While this solution has been tested in various clusters and set-ups (all Bitnami & Docker Hub Postgres based), it is not fully fool-proof. 
-1. Please make sure that you have made **proper back-ups BEFORE** you run the upgrade command against your Postgres installations on Kubernetes.
+While this solution has been tested in various clusters and set-ups (all Bitnami & Docker Hub Postgres based), it is not fool-proof. 
+1. Please make sure that you have made **proper back-ups** before you run the upgrade command against your Postgres installations on Kubernetes.
 2. Please ensure you test your upgrade proces using this tool against a production-like setup in for example a staging or test environment before running it on your production clusters.
 
 ## Installation
@@ -38,8 +38,7 @@ Aliases:
 
 Examples:
 # run pg_upgrade for a statefulset pod
-kube-pg-upgrade upgrade sts database-postgresql --target-version=15 --current-version=11
-
+kube-pg-upgrade upgrade sts database-postgresql --version=15 --current-version=11
 
 Flags:
       --current-version string     current version of the postgres database. Optional, will attempt auto discovery if left empty. For example: 9.6, 14, 15, 16, etc..
@@ -54,6 +53,20 @@ Flags:
       --upgrade-image string       Container image used to run pg_upgrade. (default "tianon/postgres-upgrade")
   -u, --user string                user used for initdb
   -v, --version string             target postgres major version. For example: 14, 15, 16, etc..
+```
+
+### Example
+
+```bash
+helm -n db-upgrade-test upgrade --wait -i test-db -f values-pg-11.yaml --version=8.9.4 bitnami/postgresql
+
+kube-pg-upgrade upgrade sts -n db-upgrade-test \
+    --version=15 \
+    --target-pvc-name data-test-db-postgresql-primary-0 \
+    --size 10Gi \
+    test-db-postgresql-master
+
+helm -n db-upgrade-test upgrade --wait -i test-db -f values-pg-15.yaml --version=12.12.10 bitnami/postgresql
 ```
 
 ### Documentation

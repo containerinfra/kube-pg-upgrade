@@ -1,4 +1,3 @@
-# .github/workflows/release.yml
 name: goreleaser
 
 on:
@@ -27,9 +26,8 @@ jobs:
       # It all depends on your needs.
       - uses: goreleaser/goreleaser-action@v5
         with:
-          # either 'goreleaser' (default) or 'goreleaser-pro':
           distribution: goreleaser
-          version: latest
+          version: ${{ github.ref_name }}
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

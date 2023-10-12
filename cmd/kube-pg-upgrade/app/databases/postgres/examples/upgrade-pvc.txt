@@ -1,2 +1,2 @@
 # run pg_upgrade for a pvc without any pods
-kube-pg-upgrade upgrade pvc data-database-postgresql-0 --target-version=15 --current-version=11
+kube-pg-upgrade upgrade pvc data-database-postgresql-0 --version=15 --current-version=11
