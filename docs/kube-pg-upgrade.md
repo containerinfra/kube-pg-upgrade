@@ -6,7 +6,7 @@
 
 ## Background Concepts
 - PostgreSQL (postgres): An open-source relational database management system (RDBMS) known for its extensibility and SQL compliance.
-- pg_upgrade: A utility that can be used to upgrade a PostgreSQL cluster to a new major version without the downtime typically associated with dump and reload methods.
+- pg_upgrade: A utility that can be used to upgrade a PostgreSQL cluster to a new major version without hassle required with dump and reload methods.
 - Kubernetes Persistent Volume Claims (PVCs): A request for storage resources in a Kubernetes cluster. PVCs can be used to manage persistent disk storage, an essential requirement for stateful applications like databases.
 
 ## Important notes (PLEASE READ)
