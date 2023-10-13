@@ -17,10 +17,8 @@ before:
     - ./scripts/shell-completions.sh
 
 archives:
-  - format: zip
+  - format: tar.gz
     name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
-  - files:
-      - completions/*
 
 release:
   draft: false
