@@ -2,7 +2,7 @@ module github.com/containerinfra/kube-pg-upgrade
 
 go 1.22.0
 
-toolchain go1.23.1
+toolchain go1.23.2
 
 require (
 	github.com/olekukonko/tablewriter v0.0.5
