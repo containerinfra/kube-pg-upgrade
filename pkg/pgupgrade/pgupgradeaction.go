@@ -8,6 +8,8 @@ import (
 )
 
 func createUpgradeJobActionInput(settings PGUpgradeSettings, sourceSubPath, targetSubPath string, pgUser string, extraInitDBArgs string) JobActions {
+	targetDataDir := fmt.Sprintf("/var/lib/postgresql/%s/data", settings.TargetPostgresVersion)
+
 	jobAction := JobActions{
 		Name:           "pg-upgrade",
 		Script:         upgradePrepareScript,
@@ -49,6 +51,7 @@ func createUpgradeJobActionInput(settings PGUpgradeSettings, sourceSubPath, targ
 				newPodEnvVar("PGUSER", pgUser),
 				newPodEnvVar("POSTGRES_USER", pgUser),
 				newPodEnvVar("POSTGRES_INITDB_ARGS", fmt.Sprintf("-U %s %s", pgUser, extraInitDBArgs)),
+				newPodEnvVar("PGDATANEW", targetDataDir),
 			},
 			VolumeMounts: []v1.VolumeMount{
 				{
@@ -59,7 +62,7 @@ func createUpgradeJobActionInput(settings PGUpgradeSettings, sourceSubPath, targ
 				},
 				{
 					Name:      "new",
-					MountPath: fmt.Sprintf("/var/lib/postgresql/%s/data", settings.TargetPostgresVersion),
+					MountPath: targetDataDir,
 					SubPath:   targetSubPath,
 				},
 			},
