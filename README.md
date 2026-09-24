@@ -18,12 +18,29 @@ While this solution has been tested in various clusters and set-ups (all Bitnami
 
 ## Installation
 
+### From GitHub Releases
+
+Download a pre-built binary from the [GitHub Releases](https://github.com/containerinfra/kube-pg-upgrade/releases) page.
+
+Example (Linux amd64):
+
 ```bash
-{
-    make build;
-    cp bin/kube-pg-upgrade /usr/local/bin/kube-pg-upgrade;
-    kube-pg-upgrade -h;
-}
+VERSION=v0.2.0 # set to the release tag you want
+curl -fsSL -o kube-pg-upgrade.tar.gz \
+  "https://github.com/containerinfra/kube-pg-upgrade/releases/download/${VERSION}/kube-pg-upgrade_${VERSION#v}_linux_amd64.tar.gz"
+tar -xzf kube-pg-upgrade.tar.gz
+sudo install -m 755 kube-pg-upgrade /usr/local/bin/kube-pg-upgrade
+kube-pg-upgrade -h
+```
+
+Verify the archive against `checksums.txt` from the same release when possible.
+
+### Build from source
+
+```bash
+make build
+sudo install -m 755 bin/kube-pg-upgrade /usr/local/bin/kube-pg-upgrade
+kube-pg-upgrade -h
 ```
 
 ## Usage
