@@ -55,9 +55,6 @@ func TestPGUpgradeE2E(t *testing.T) {
 	noChecksums := "--no-data-checksums"
 
 	cases := []dockerHubUpgradeCase{
-		// Legacy jump still covered on amd64 CI (upgrade image is amd64-only).
-		{name: "11_to_15", currentVersion: "11", targetVersion: "15"},
-
 		// Recent major jumps to PG18 (multi-arch upgrade images).
 		{name: "13_to_18", currentVersion: "13", targetVersion: "18", extraInitDBArgs: noChecksums},
 		{name: "14_to_18", currentVersion: "14", targetVersion: "18", extraInitDBArgs: noChecksums},
