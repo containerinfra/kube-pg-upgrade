@@ -164,6 +164,8 @@ func RunPGDataMigration(ctx context.Context, k8sClient *kubernetes.Clientset, na
 				kubevolumes.NewPersistentVolumeClaimVolume("old", sourcePersistenVolumeName, false),
 				kubevolumes.NewPersistentVolumeClaimVolume("new", upgradeTargetPersistentVolumeTempName, false),
 				kubevolumes.NewVolumeFromSecret("scripts", scriptSecretName),
+				{Name: "tmp", VolumeSource: v1.VolumeSource{EmptyDir: &v1.EmptyDirVolumeSource{}}},
+				{Name: "postgresql-run", VolumeSource: v1.VolumeSource{EmptyDir: &v1.EmptyDirVolumeSource{}}},
 			},
 		},
 	})
@@ -241,6 +243,8 @@ func RunPGDataMigration(ctx context.Context, k8sClient *kubernetes.Clientset, na
 			Volumes: []v1.Volume{
 				kubevolumes.NewPersistentVolumeClaimVolume("new", targetPVCName, false),
 				kubevolumes.NewVolumeFromSecret("scripts", scriptSecretName),
+				{Name: "tmp", VolumeSource: v1.VolumeSource{EmptyDir: &v1.EmptyDirVolumeSource{}}},
+				{Name: "postgresql-run", VolumeSource: v1.VolumeSource{EmptyDir: &v1.EmptyDirVolumeSource{}}},
 			},
 		},
 	})

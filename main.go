@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+
 	"github.com/containerinfra/kube-pg-upgrade/cmd/kube-pg-upgrade/app"
 	versionpkg "github.com/containerinfra/kube-pg-upgrade/pkg/version"
 )
@@ -15,7 +17,9 @@ var (
 )
 
 func main() {
-	app.Execute()
+	if err := app.Execute(); err != nil {
+		os.Exit(1)
+	}
 }
 
 func init() {

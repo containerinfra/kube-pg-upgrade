@@ -2,6 +2,7 @@ package pgupgrade
 
 import (
 	"fmt"
+	"path"
 
 	v1 "k8s.io/api/core/v1"
 
@@ -9,7 +10,20 @@ import (
 )
 
 func createUpgradeJobActionInput(settings PGUpgradeSettings, sourceSubPath, targetSubPath string, pgUser string, extraInitDBArgs string) JobActions {
-	targetDataDir := fmt.Sprintf("/var/lib/postgresql/%s/data", settings.TargetPostgresVersion)
+	// Mount PVC roots (no VolumeMount.SubPath). Cluster files live in a *subdirectory*
+	// named by the subpath setting (default "data"). That way initdb/pg_ctl can chmod
+	// PGDATA — chmod on a Kubernetes subPath mount point fails with EPERM.
+	if sourceSubPath == "" {
+		sourceSubPath = "data"
+	}
+	if targetSubPath == "" {
+		targetSubPath = "data"
+	}
+
+	oldRoot := fmt.Sprintf("/var/lib/postgresql/%s", settings.CurrentPostgresVersion)
+	newRoot := fmt.Sprintf("/var/lib/postgresql/%s", settings.TargetPostgresVersion)
+	oldDataDir := path.Join(oldRoot, sourceSubPath)
+	newDataDir := path.Join(newRoot, targetSubPath)
 
 	jobAction := JobActions{
 		Name:            "pg-upgrade",
@@ -27,22 +41,31 @@ func createUpgradeJobActionInput(settings PGUpgradeSettings, sourceSubPath, targ
 			},
 			Command: []string{"/bin/sh"},
 			Args:    []string{fmt.Sprintf("/scripts/%s", PrepareScriptFileName)},
+			Env: []v1.EnvVar{
+				newPodEnvVar("OLD_DATA", "/old/"+sourceSubPath),
+				newPodEnvVar("NEW_DATA", "/new/"+targetSubPath),
+			},
 			VolumeMounts: []v1.VolumeMount{
 				{
-					Name: "old",
-
+					Name:      "old",
 					MountPath: "/old",
-					SubPath:   sourceSubPath,
 				},
 				{
 					Name:      "new",
 					MountPath: "/new",
-					SubPath:   targetSubPath,
 				},
 				{
 					Name:      "scripts",
 					MountPath: "/scripts/",
 					ReadOnly:  true,
+				},
+				{
+					Name:      "tmp",
+					MountPath: "/tmp",
+				},
+				{
+					Name:      "postgresql-run",
+					MountPath: "/var/run/postgresql",
 				},
 			},
 		},
@@ -59,19 +82,25 @@ func createUpgradeJobActionInput(settings PGUpgradeSettings, sourceSubPath, targ
 				newPodEnvVar("PGUSER", pgUser),
 				newPodEnvVar("POSTGRES_USER", pgUser),
 				newPodEnvVar("POSTGRES_INITDB_ARGS", fmt.Sprintf("-U %s %s", pgUser, extraInitDBArgs)),
-				newPodEnvVar("PGDATANEW", targetDataDir),
+				newPodEnvVar("PGDATAOLD", oldDataDir),
+				newPodEnvVar("PGDATANEW", newDataDir),
 			},
 			VolumeMounts: []v1.VolumeMount{
 				{
-					Name: "old",
-
-					MountPath: fmt.Sprintf("/var/lib/postgresql/%s/data", settings.CurrentPostgresVersion),
-					SubPath:   sourceSubPath,
+					Name:      "old",
+					MountPath: oldRoot,
 				},
 				{
 					Name:      "new",
-					MountPath: targetDataDir,
-					SubPath:   targetSubPath,
+					MountPath: newRoot,
+				},
+				{
+					Name:      "tmp",
+					MountPath: "/tmp",
+				},
+				{
+					Name:      "postgresql-run",
+					MountPath: "/var/run/postgresql",
 				},
 			},
 		},
@@ -86,16 +115,26 @@ func createUpgradeJobActionInput(settings PGUpgradeSettings, sourceSubPath, targ
 			},
 			Command: []string{"/bin/sh"},
 			Args:    []string{fmt.Sprintf("/scripts/%s", PostHookScriptFileName)},
+			Env: []v1.EnvVar{
+				newPodEnvVar("NEW_DATA", "/new/"+targetSubPath),
+			},
 			VolumeMounts: []v1.VolumeMount{
 				{
 					Name:      "new",
 					MountPath: "/new",
-					SubPath:   targetSubPath,
 				},
 				{
 					Name:      "scripts",
 					MountPath: "/scripts/",
 					ReadOnly:  true,
+				},
+				{
+					Name:      "tmp",
+					MountPath: "/tmp",
+				},
+				{
+					Name:      "postgresql-run",
+					MountPath: "/var/run/postgresql",
 				},
 			},
 		},

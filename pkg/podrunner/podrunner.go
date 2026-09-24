@@ -103,6 +103,15 @@ func (c *Client) waitForPodToStart(ctx context.Context, namespace, jobName strin
 		if err != nil {
 			return err
 		}
+		for _, initStatus := range pod.Status.InitContainerStatuses {
+			if initStatus.State.Terminated != nil && initStatus.State.Terminated.ExitCode != 0 {
+				return fmt.Errorf("init container %q failed with exit code %d: %s",
+					initStatus.Name, initStatus.State.Terminated.ExitCode, initStatus.State.Terminated.Reason)
+			}
+		}
+		if pod.Status.Phase == v1.PodFailed {
+			return fmt.Errorf("pod %q failed before containers started: %s", jobName, pod.Status.Reason)
+		}
 		for _, containerStatus := range pod.Status.ContainerStatuses {
 			if containerStatus.State.Running != nil || containerStatus.State.Terminated != nil {
 				return nil

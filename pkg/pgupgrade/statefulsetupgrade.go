@@ -205,7 +205,7 @@ func autodiscoverPostgresContainer(ctx context.Context, k8sclient *kubernetes.Cl
 
 	var postgresContainer *v1.Container
 	for _, container := range containers {
-		if isImage(container.Image, "/bitnami/postgresql:", "docker.io/bitnami/postgresql:", "/postgres:", "/postgresql:") {
+		if isPostgresContainerImage(container.Image) {
 			c := container
 			postgresContainer = &c
 			fmt.Printf("found container: %q\n", container.Name)
@@ -236,11 +236,19 @@ func getEnvValue(envs []v1.EnvVar, names ...string) string {
 	return ""
 }
 
-func isImage(containerImage string, images ...string) bool {
-	for _, image := range images {
-		if strings.Contains(containerImage, image) {
-			return true
-		}
+// isPostgresContainerImage recognizes Bitnami and Docker Hub Postgres images,
+// including short names like "postgres:13" (no registry prefix).
+func isPostgresContainerImage(image string) bool {
+	lower := strings.ToLower(image)
+	switch {
+	case strings.HasPrefix(lower, "postgres:"),
+		strings.HasPrefix(lower, "postgresql:"):
+		return true
+	case strings.Contains(lower, "/postgres:"),
+		strings.Contains(lower, "/postgresql:"),
+		strings.Contains(lower, "/bitnami/postgresql:"):
+		return true
+	default:
+		return false
 	}
-	return false
 }

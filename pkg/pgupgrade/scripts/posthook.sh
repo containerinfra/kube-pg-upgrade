@@ -1,6 +1,9 @@
 #!/bin/bash
+set -euo pipefail
 
-echo "validating the database is able to start..."
+NEW_DATA="${NEW_DATA:-/new/data}"
+
+echo "validating the database is able to start at ${NEW_DATA}..."
 
 run_pg_ctl() {
 	if [ "$(id -u)" = "0" ]; then
@@ -12,11 +15,11 @@ run_pg_ctl() {
 }
 
 # validate we are able to start the database
-run_pg_ctl "${PGBINNEW}/pg_ctl start -w -D /new"
-run_pg_ctl "${PGBINNEW}/pg_ctl stop -w -D /new"
+run_pg_ctl "${PGBINNEW}/pg_ctl start -w -D ${NEW_DATA}"
+run_pg_ctl "${PGBINNEW}/pg_ctl stop -w -D ${NEW_DATA}"
 
 # Show database size
 echo database size:
-df -h /new
+df -h "${NEW_DATA}"
 
 echo "completed posthook script.."
