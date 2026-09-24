@@ -23,7 +23,7 @@ jobs:
           cache: true
 
       - name: Install kubectl
-        uses: azure/setup-kubectl@v4
+        uses: azure/setup-kubectl@v5
         with:
           version: v1.37.0
 
