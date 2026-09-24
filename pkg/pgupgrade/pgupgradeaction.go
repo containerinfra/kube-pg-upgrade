@@ -31,8 +31,9 @@ func createUpgradeJobActionInput(settings PGUpgradeSettings, sourceSubPath, targ
 		PostHookScript:  postHookScript,
 		SecurityContext: settings.SecurityContext,
 		PrepareContainer: v1.Container{
-			Name:  "prepare",
-			Image: settings.GetUpgradeImage(),
+			Name:       "prepare",
+			Image:      settings.GetUpgradeImage(),
+			WorkingDir: "/tmp",
 			SecurityContext: &v1.SecurityContext{
 				RunAsNonRoot:           &settings.SecurityContext.RunAsNonRoot,
 				RunAsUser:              &settings.SecurityContext.RunAsUser,
@@ -70,8 +71,9 @@ func createUpgradeJobActionInput(settings PGUpgradeSettings, sourceSubPath, targ
 			},
 		},
 		JobContainer: v1.Container{
-			Name:  "upgrade-postgres",
-			Image: settings.GetUpgradeImage(),
+			Name:       "upgrade-postgres",
+			Image:      settings.GetUpgradeImage(),
+			WorkingDir: "/tmp",
 			SecurityContext: &v1.SecurityContext{
 				RunAsNonRoot:           &settings.SecurityContext.RunAsNonRoot,
 				RunAsUser:              &settings.SecurityContext.RunAsUser,
@@ -105,8 +107,9 @@ func createUpgradeJobActionInput(settings PGUpgradeSettings, sourceSubPath, targ
 			},
 		},
 		PostHookContainer: v1.Container{
-			Name:  "posthook",
-			Image: settings.GetUpgradeImage(),
+			Name:       "posthook",
+			Image:      settings.GetUpgradeImage(),
+			WorkingDir: "/tmp",
 			SecurityContext: &v1.SecurityContext{
 				RunAsNonRoot:           &settings.SecurityContext.RunAsNonRoot,
 				RunAsUser:              &settings.SecurityContext.RunAsUser,
