@@ -4,7 +4,7 @@
 touch /old/postgresql.conf
 
 # if an old postmaster.pid is still present, remove it
-rm /old/postmaster.pid
+rm -f /old/postmaster.pid
 
 # TODO: use --old-datadir=configdir 
 
@@ -24,12 +24,24 @@ echo "host all all all md5" >> /old/pg_hba.conf
 # local    all             all                                     md5
 # host      replication     all             0.0.0.0/0               md5
 
-# fix permissions so we can start postgres 
-chown postgres /old -R
+run_pg_ctl() {
+	if [ "$(id -u)" = "0" ]; then
+		su postgres -c "$*"
+	else
+		# Non-root: run as the configured UID (e.g. Bitnami 1001 / Docker Hub 999).
+		# FSGroup owns the volume; do not chown to the image's postgres user.
+		sh -c "$*"
+	fi
+}
+
+# fix permissions so we can start postgres (root only; non-root relies on FSGroup)
+if [ "$(id -u)" = "0" ]; then
+	chown postgres /old -R
+fi
 
 # Fix source cluster was not shut down cleanly
-su postgres -c "${PGBINOLD}/pg_ctl start -w -D /old"
-su postgres -c "${PGBINOLD}/pg_ctl stop -w -D /old"
+run_pg_ctl "${PGBINOLD}/pg_ctl start -w -D /old"
+run_pg_ctl "${PGBINOLD}/pg_ctl stop -w -D /old"
 
 # Show database size
 echo database size:

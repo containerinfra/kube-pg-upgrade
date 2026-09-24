@@ -3,22 +3,27 @@ package pgupgrade
 import (
 	"fmt"
 
-	"github.com/containerinfra/kube-pg-upgrade/pkg/ptrs"
 	v1 "k8s.io/api/core/v1"
+
+	"github.com/containerinfra/kube-pg-upgrade/pkg/ptrs"
 )
 
 func createUpgradeJobActionInput(settings PGUpgradeSettings, sourceSubPath, targetSubPath string, pgUser string, extraInitDBArgs string) JobActions {
 	targetDataDir := fmt.Sprintf("/var/lib/postgresql/%s/data", settings.TargetPostgresVersion)
 
 	jobAction := JobActions{
-		Name:           "pg-upgrade",
-		Script:         upgradePrepareScript,
-		PostHookScript: postHookScript,
+		Name:            "pg-upgrade",
+		Script:          upgradePrepareScript,
+		PostHookScript:  postHookScript,
+		SecurityContext: settings.SecurityContext,
 		PrepareContainer: v1.Container{
 			Name:  "prepare",
 			Image: settings.GetUpgradeImage(),
 			SecurityContext: &v1.SecurityContext{
-				RunAsNonRoot: ptrs.False(),
+				RunAsNonRoot:           &settings.SecurityContext.RunAsNonRoot,
+				RunAsUser:              &settings.SecurityContext.RunAsUser,
+				RunAsGroup:             &settings.SecurityContext.RunAsGroup,
+				ReadOnlyRootFilesystem: ptrs.True(),
 			},
 			Command: []string{"/bin/sh"},
 			Args:    []string{fmt.Sprintf("/scripts/%s", PrepareScriptFileName)},
@@ -45,7 +50,10 @@ func createUpgradeJobActionInput(settings PGUpgradeSettings, sourceSubPath, targ
 			Name:  "upgrade-postgres",
 			Image: settings.GetUpgradeImage(),
 			SecurityContext: &v1.SecurityContext{
-				RunAsNonRoot: ptrs.False(),
+				RunAsNonRoot:           &settings.SecurityContext.RunAsNonRoot,
+				RunAsUser:              &settings.SecurityContext.RunAsUser,
+				RunAsGroup:             &settings.SecurityContext.RunAsGroup,
+				ReadOnlyRootFilesystem: ptrs.True(),
 			},
 			Env: []v1.EnvVar{
 				newPodEnvVar("PGUSER", pgUser),
@@ -71,9 +79,10 @@ func createUpgradeJobActionInput(settings PGUpgradeSettings, sourceSubPath, targ
 			Name:  "posthook",
 			Image: settings.GetUpgradeImage(),
 			SecurityContext: &v1.SecurityContext{
-				RunAsUser:    ptrs.Int64(0),
-				RunAsGroup:   ptrs.Int64(0),
-				RunAsNonRoot: ptrs.False(),
+				RunAsNonRoot:           &settings.SecurityContext.RunAsNonRoot,
+				RunAsUser:              &settings.SecurityContext.RunAsUser,
+				RunAsGroup:             &settings.SecurityContext.RunAsGroup,
+				ReadOnlyRootFilesystem: ptrs.True(),
 			},
 			Command: []string{"/bin/sh"},
 			Args:    []string{fmt.Sprintf("/scripts/%s", PostHookScriptFileName)},

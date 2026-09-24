@@ -16,7 +16,6 @@ import (
 	"github.com/containerinfra/kube-pg-upgrade/pkg/kubesecrethelper"
 	"github.com/containerinfra/kube-pg-upgrade/pkg/kubevolumes"
 	"github.com/containerinfra/kube-pg-upgrade/pkg/podrunner"
-	"github.com/containerinfra/kube-pg-upgrade/pkg/ptrs"
 )
 
 //go:embed scripts/prepare.sh
@@ -45,6 +44,15 @@ type PGUpgradeSettings struct {
 	SourcePVCName string
 	TargetPVCName string
 	SubPath       string
+
+	SecurityContext SecurityContext
+}
+
+type SecurityContext struct {
+	RunAsNonRoot bool
+	RunAsUser    int64
+	RunAsGroup   int64
+	FSGroup      int64
 }
 
 func (s *PGUpgradeSettings) GetUpgradeImage() string {
@@ -77,6 +85,8 @@ type JobActions struct {
 	JobContainer      v1.Container
 	PrepareContainer  v1.Container
 	PostHookContainer v1.Container
+
+	SecurityContext SecurityContext
 }
 
 func RunPGDataMigration(ctx context.Context, k8sClient *kubernetes.Clientset, namespace, sourcePersistenVolumeName, targetPVCName, storageClassName string, newSize string, jobaction JobActions) error {
@@ -134,8 +144,14 @@ func RunPGDataMigration(ctx context.Context, k8sClient *kubernetes.Clientset, na
 		},
 		Spec: v1.PodSpec{
 			SecurityContext: &v1.PodSecurityContext{
-				RunAsNonRoot:        ptrs.False(),
+				RunAsNonRoot:        &jobaction.SecurityContext.RunAsNonRoot,
+				RunAsUser:           &jobaction.SecurityContext.RunAsUser,
+				RunAsGroup:          &jobaction.SecurityContext.RunAsGroup,
+				FSGroup:             &jobaction.SecurityContext.FSGroup,
 				FSGroupChangePolicy: &mismatch,
+				SeccompProfile: &v1.SeccompProfile{
+					Type: "RuntimeDefault",
+				},
 			},
 			InitContainers: []v1.Container{
 				jobaction.PrepareContainer,
@@ -209,8 +225,14 @@ func RunPGDataMigration(ctx context.Context, k8sClient *kubernetes.Clientset, na
 		},
 		Spec: v1.PodSpec{
 			SecurityContext: &v1.PodSecurityContext{
-				RunAsNonRoot:        ptrs.False(),
+				RunAsNonRoot:        &jobaction.SecurityContext.RunAsNonRoot,
+				RunAsUser:           &jobaction.SecurityContext.RunAsUser,
+				RunAsGroup:          &jobaction.SecurityContext.RunAsGroup,
+				FSGroup:             &jobaction.SecurityContext.FSGroup,
 				FSGroupChangePolicy: &mismatch,
+				SeccompProfile: &v1.SeccompProfile{
+					Type: "RuntimeDefault",
+				},
 			},
 			Containers: []v1.Container{
 				jobaction.PostHookContainer,

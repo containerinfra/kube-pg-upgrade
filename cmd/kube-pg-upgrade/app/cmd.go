@@ -13,12 +13,12 @@ import (
 
 // Execute runs the kube-pg-upgrade application
 func Execute() error {
-	cmd := NewACloudToolKitCmd(os.Stdin, os.Stdout, os.Stderr)
+	cmd := Cmd(os.Stdin, os.Stdout, os.Stderr)
 	return cmd.Execute()
 }
 
-// NewACloudToolKitCmd returns cobra.Command to run the kube-pg-upgrade command
-func NewACloudToolKitCmd(in io.Reader, out, err io.Writer) *cobra.Command {
+// Cmd returns cobra.Command to run the kube-pg-upgrade command
+func Cmd(in io.Reader, out, err io.Writer) *cobra.Command {
 	cmds := &cobra.Command{
 		Use:   "kube-pg-upgrade",
 		Short: "kube-pg-upgrade for upgrades Postgres on Kubernetes",
