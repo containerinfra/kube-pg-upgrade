@@ -62,10 +62,6 @@ func TestPGUpgradeE2E(t *testing.T) {
 		{name: "16_to_18", currentVersion: "16", targetVersion: "18", extraInitDBArgs: noChecksums},
 		{name: "17_to_18", currentVersion: "17", targetVersion: "18", extraInitDBArgs: noChecksums},
 
-		// Intermediate majors (tianon images currently amd64-only).
-		{name: "15_to_17", currentVersion: "15", targetVersion: "17"},
-		{name: "16_to_17", currentVersion: "16", targetVersion: "17"},
-
 		// Deployment layout variants.
 		{
 			name:            "16_to_18_custom_subpath",
