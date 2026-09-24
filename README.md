@@ -18,12 +18,29 @@ While this solution has been tested in various clusters and set-ups (all Bitnami
 
 ## Installation
 
+### From GitHub Releases
+
+Download a pre-built binary from the [GitHub Releases](https://github.com/containerinfra/kube-pg-upgrade/releases) page.
+
+Example (Linux amd64):
+
 ```bash
-{
-    make build;
-    cp bin/kube-pg-upgrade /usr/local/bin/kube-pg-upgrade;
-    kube-pg-upgrade -h;
-}
+VERSION=v0.2.0 # set to the release tag you want
+curl -fsSL -o kube-pg-upgrade.tar.gz \
+  "https://github.com/containerinfra/kube-pg-upgrade/releases/download/${VERSION}/kube-pg-upgrade_${VERSION#v}_linux_amd64.tar.gz"
+tar -xzf kube-pg-upgrade.tar.gz
+sudo install -m 755 kube-pg-upgrade /usr/local/bin/kube-pg-upgrade
+kube-pg-upgrade -h
+```
+
+Verify the archive against `checksums.txt` from the same release when possible.
+
+### Build from source
+
+```bash
+make build
+sudo install -m 755 bin/kube-pg-upgrade /usr/local/bin/kube-pg-upgrade
+kube-pg-upgrade -h
 ```
 
 ## Usage
@@ -43,8 +60,12 @@ kube-pg-upgrade upgrade sts database-postgresql --version=15 --current-version=1
 Flags:
       --current-version string     current version of the postgres database. Optional, will attempt auto discovery if left empty. For example: 9.6, 14, 15, 16, etc..
   -i, --extra-initdb-args string   provide any additional arguments for init-db. Use the same arguments that were provided when the database was originally created. See https://www.postgresql.org/docs/current/pgupgrade.html. Otherwise will attempt to auto detect.
+      --fs-group int               The group ID that owns the volume mounted by the container. Defaults to 999, the Docker Hub postgres default (default 999)
   -h, --help                       help for statefulset
   -n, --namespace string           namespace of the postgres instance. Default is the configured namespace in your kubecontext.
+      --run-as-group-id int        The group ID that runs the container. Defaults to 999, the Docker Hub postgres group (default 999)
+      --run-as-non-root            Run the container as a non-root user (default true)
+      --run-as-user-id int         The user ID that runs the container. Defaults to 999, the Docker Hub postgres user. (default 999)
       --size string                New size. Example: 10G
       --source-pvc-name string     The name of the Persistent Volume Claim with the current postgres data. Optional, will attempt auto discovery if left empty.
       --subpath string             subpath used for mounting the pvc
@@ -55,20 +76,38 @@ Flags:
   -v, --version string             target postgres major version. For example: 14, 15, 16, etc..
 ```
 
+Security context defaults match the Docker Hub Postgres user (`999`). For Bitnami images, use `1001` for `--run-as-user-id`, `--run-as-group-id`, and `--fs-group`.
+
 ### Example
 
+See [`examples/upgrade.sh`](examples/upgrade.sh) for a full Bitnami 11 → 15 flow. Condensed:
+
 ```bash
-helm -n db-upgrade-test upgrade --wait -i test-db -f values-pg-11.yaml --version=8.9.4 bitnami/postgresql
+helm -n db-upgrade-test upgrade --wait -i test-db \
+  -f examples/values-pg-11.yaml --version=11.9.13 bitnami/postgresql
 
 kube-pg-upgrade upgrade sts -n db-upgrade-test \
     --version=15 \
-    --target-pvc-name data-test-db-postgresql-primary-0 \
+    --target-pvc-name data-test-db-postgresql-0 \
     --size 10Gi \
-    test-db-postgresql-master
+    --run-as-user-id=1001 \
+    --run-as-group-id=1001 \
+    --fs-group=1001 \
+    test-db-postgresql
 
-helm -n db-upgrade-test upgrade --wait -i test-db -f values-pg-15.yaml --version=12.12.10 bitnami/postgresql
+helm -n db-upgrade-test upgrade --wait -i test-db \
+  -f examples/values-pg-15.yaml --version=12.12.10 bitnami/postgresql
 ```
 
 ### Documentation
 
 - [documentation](docs/kube-pg-upgrade.md)
+
+## E2E tests
+
+End-to-end tests drive a local `bin/kube-pg-upgrade` binary against a **kind** cluster. They install Docker Hub Postgres, seed data, run the CLI upgrade, and verify rows survived.
+
+```bash
+make e2e-kind-up
+make test-e2e
+```

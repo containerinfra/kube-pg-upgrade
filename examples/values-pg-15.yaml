@@ -1,0 +1,13 @@
+# Bitnami PostgreSQL 15 example values for kube-pg-upgrade testing.
+# Use with: helm upgrade --install ... -f examples/values-pg-15.yaml --version=12.12.10 bitnami/postgresql
+architecture: standalone
+
+auth:
+  enablePostgresUser: true
+  postgresPassword: "changeme"
+  database: "app"
+
+primary:
+  persistence:
+    enabled: true
+    size: 8Gi

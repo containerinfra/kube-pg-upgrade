@@ -1,5 +1,6 @@
 BINARY = kube-pg-upgrade
 GOARCH = amd64
+E2E_KIND_CLUSTER_NAME ?= kube-pg-upgrade-e2e
 
 COMMIT=$(shell git rev-parse HEAD)
 BRANCH=$(shell git rev-parse --abbrev-ref HEAD)
@@ -35,6 +36,21 @@ build:
 test: ## Run unittests
 	@go test -short ${PKG_LIST}
 
+e2e-kind-up: ## Create (or reuse) an amd64 kind cluster for E2E tests
+	@chmod +x scripts/e2e-kind.sh
+	@E2E_KIND_CLUSTER_NAME="$(E2E_KIND_CLUSTER_NAME)" ./scripts/e2e-kind.sh up
+
+e2e-kind-down: ## Delete the E2E kind cluster
+	@chmod +x scripts/e2e-kind.sh
+	@E2E_KIND_CLUSTER_NAME="$(E2E_KIND_CLUSTER_NAME)" ./scripts/e2e-kind.sh down
+
+test-e2e: build e2e-kind-up ## Run E2E tests against kind (requires docker, kind, kubectl)
+	@E2E_KIND_CLUSTER_NAME="$(E2E_KIND_CLUSTER_NAME)" ./scripts/e2e-kind.sh kubeconfig > /tmp/kube-pg-upgrade-e2e.kubeconfig
+	@KUBECONFIG=/tmp/kube-pg-upgrade-e2e.kubeconfig \
+		KUBE_PG_UPGRADE_BIN="$(CURDIR)/bin/${BINARY}" \
+		E2E_KIND_CLUSTER_NAME="$(E2E_KIND_CLUSTER_NAME)" \
+		go test -tags=e2e -count=1 -timeout 90m -v ./test/e2e/...
+
 fmt:
 	@go fmt ${PKG_LIST};
 
@@ -44,4 +60,4 @@ docker:
 clean:
 	-rm -f bin/${BINARY}-* bin/${BINARY}
 
-.PHONY: link linux darwin windows test fmt clean
+.PHONY: link linux darwin windows test e2e-kind-up e2e-kind-down test-e2e fmt clean

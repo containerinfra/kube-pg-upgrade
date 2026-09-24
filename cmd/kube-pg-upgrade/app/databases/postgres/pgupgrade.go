@@ -34,6 +34,11 @@ type postgresPGUpgradeOptions struct {
 	sourcePVCName string
 	targetPVCName string
 	subPath       string
+
+	runAsUserId  int64
+	runAsGroupId int64
+	fsGroup      int64
+	RunAsNonRoot bool
 }
 
 func newPostgresPGUpgradeOptions() *postgresPGUpgradeOptions {
@@ -56,6 +61,12 @@ func AddPostgresStatefulSetUpgradeFlags(flagSet *flag.FlagSet, opts *postgresPGU
 	flagSet.StringVar(&opts.sourcePVCName, "source-pvc-name", "", "The name of the Persistent Volume Claim with the current postgres data. Optional, will attempt auto discovery if left empty.")
 	flagSet.StringVar(&opts.targetPVCName, "target-pvc-name", "", "Target name of Persistent Volume Claim that will serve as the target for the upgraded postgres data. This is an optional setting, will use the source PVC name by default.")
 
+	// security context settings
+	flagSet.Int64Var(&opts.runAsUserId, "run-as-user-id", 999, "The user ID that runs the container. Defaults to 999, the Docker Hub postgres user.")
+	flagSet.Int64Var(&opts.runAsGroupId, "run-as-group-id", 999, "The group ID that runs the container. Defaults to 999, the Docker Hub postgres group")
+	flagSet.Int64Var(&opts.fsGroup, "fs-group", 999, "The group ID that owns the volume mounted by the container. Defaults to 999, the Docker Hub postgres default")
+	flagSet.BoolVar(&opts.RunAsNonRoot, "run-as-non-root", true, "Run the container as a non-root user")
+
 	// Other
 	flagSet.DurationVar(&opts.timeout, "timeout", 0*time.Second, "The length of time to wait before giving up, zero means infinite")
 }
@@ -74,6 +85,12 @@ func AddPostgresPVCUpgradeFlags(flagSet *flag.FlagSet, opts *postgresPGUpgradeOp
 	flagSet.StringVar(&opts.newPVCDiskSize, "size", "", "New size. Example: 10G")
 	flagSet.StringVar(&opts.subPath, "subpath", "", "subpath used for mounting the pvc")
 	flagSet.StringVar(&opts.targetPVCName, "target-pvc-name", "", "Target name of Persistent Volume Claim that will serve as the target for the upgraded postgres data. This is an optional setting, will use the source PVC name by default.")
+
+	// security context settings
+	flagSet.Int64Var(&opts.runAsUserId, "run-as-user-id", 999, "The user ID that runs the container. Defaults to 999, the Docker Hub postgres user.")
+	flagSet.Int64Var(&opts.runAsGroupId, "run-as-group-id", 999, "The group ID that runs the container. Defaults to 999, the Docker Hub postgres group")
+	flagSet.Int64Var(&opts.fsGroup, "fs-group", 999, "The group ID that owns the volume mounted by the container. Defaults to 999, the Docker Hub postgres default")
+	flagSet.BoolVar(&opts.RunAsNonRoot, "run-as-non-root", true, "Run the container as a non-root user")
 
 	// Other
 	flagSet.DurationVar(&opts.timeout, "timeout", 0*time.Second, "The length of time to wait before giving up, zero means infinite")
@@ -117,6 +134,13 @@ func NewUpgradePostgresStatefulSetCmd(runOptions *postgresPGUpgradeOptions) *cob
 				TargetPVCName: runOptions.targetPVCName,
 				SourcePVCName: runOptions.sourcePVCName,
 				SubPath:       runOptions.subPath,
+
+				SecurityContext: pgupgrade.SecurityContext{
+					RunAsUser:    runOptions.runAsUserId,
+					RunAsGroup:   runOptions.runAsGroupId,
+					FSGroup:      runOptions.fsGroup,
+					RunAsNonRoot: runOptions.RunAsNonRoot,
+				},
 			})
 			if err != nil {
 				return err
@@ -170,6 +194,13 @@ func NewUpgradePostgresPVCCmd(runOptions *postgresPGUpgradeOptions) *cobra.Comma
 				TargetPVCName: runOptions.targetPVCName,
 				SourcePVCName: args[0],
 				SubPath:       runOptions.subPath,
+
+				SecurityContext: pgupgrade.SecurityContext{
+					RunAsUser:    runOptions.runAsUserId,
+					RunAsGroup:   runOptions.runAsGroupId,
+					FSGroup:      runOptions.fsGroup,
+					RunAsNonRoot: runOptions.RunAsNonRoot,
+				},
 			})
 			if err != nil {
 				return err
