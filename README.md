@@ -85,3 +85,12 @@ helm -n db-upgrade-test upgrade --wait -i test-db \
 ### Documentation
 
 - [documentation](docs/kube-pg-upgrade.md)
+
+## E2E tests
+
+End-to-end tests drive a local `bin/kube-pg-upgrade` binary against a **kind** cluster. They install Docker Hub Postgres, seed data, run the CLI upgrade, and verify rows survived.
+
+```bash
+make e2e-kind-up
+make test-e2e
+```
