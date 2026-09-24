@@ -8,26 +8,35 @@ on:
     branches:
       - main
 
+concurrency:
+  group: pr-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
-  build-push:
+  test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        go-version: ["1.21"]
+    timeout-minutes: 15
     steps:
-      - name: Set up Go ${{ matrix.go-version }}
+      - name: Check out code
+        uses: actions/checkout@v5
+
+      - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: ${{ matrix.go-version }}
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v4
+          go-version-file: go.mod
+          cache: true
+
       - name: Run tests
-        run: go test -v -p 1 ./...
-      - uses: goreleaser/goreleaser-action@v6
+        run: go test -v ./...
+
+      - name: Snapshot build
+        uses: goreleaser/goreleaser-action@v6
         with:
-          # either 'goreleaser' (default) or 'goreleaser-pro':
           distribution: goreleaser
-          version: latest
-          args: build --clean --snapshot 
+          version: "~> v2"
+          args: build --clean --snapshot
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
