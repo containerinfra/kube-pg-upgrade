@@ -14,9 +14,10 @@ import (
 )
 
 const (
-	pgPassword     = "e2e-changeme"
-	expectedVerify = "1|alpha|first-row\n2|beta|second-row\n3|gamma|third-row"
-	defaultSubpath = "pgdata"
+	pgPassword       = "e2e-changeme"
+	expectedVerify   = "1|alpha|first-row\n2|beta|second-row\n3|gamma|third-row"
+	defaultSubpath   = "pgdata"
+	defaultMountPath = "/var/lib/postgresql/data"
 )
 
 type dockerHubUpgradeCase struct {
@@ -26,8 +27,22 @@ type dockerHubUpgradeCase struct {
 	targetVersion  string
 	// subpath is the cluster directory on the PVC (and --subpath). Empty → pgdata.
 	subpath string
+	// mountPath is where the PVC is mounted in the container. Empty → /var/lib/postgresql/data.
+	// PGDATA is always mountPath/subpath.
+	mountPath string
 	// extraInitDBArgs are passed to kube-pg-upgrade (e.g. PG18 checksum defaults).
 	extraInitDBArgs string
+	// securityContext configures the STS and matching kube-pg-upgrade CLI flags.
+	// nil keeps Docker Hub defaults (999) without passing security-context flags.
+	securityContext *securityContextOpts
+}
+
+// securityContextOpts mirrors the CLI security-context flags.
+type securityContextOpts struct {
+	runAsUser    int64
+	runAsGroup   int64
+	fsGroup      int64
+	runAsNonRoot bool
 }
 
 func TestPGUpgradeE2E(t *testing.T) {
@@ -69,6 +84,40 @@ func TestPGUpgradeE2E(t *testing.T) {
 			subpath:         "db-files",
 			extraInitDBArgs: noChecksums,
 		},
+		{
+			name:            "16_to_18_nested_subpath",
+			currentVersion:  "16",
+			targetVersion:   "18",
+			subpath:         "clusters/main",
+			extraInitDBArgs: noChecksums,
+		},
+		{
+			name:            "15_to_18_custom_mount",
+			currentVersion:  "15",
+			targetVersion:   "18",
+			mountPath:       "/pgsql",
+			subpath:         "pgdata",
+			extraInitDBArgs: noChecksums,
+		},
+		{
+			name:            "16_to_18_custom_mount_and_subpath",
+			currentVersion:  "16",
+			targetVersion:   "18",
+			mountPath:       "/var/lib/pgsql/data",
+			subpath:         "db",
+			extraInitDBArgs: noChecksums,
+		},
+
+		// Security context: explicit Docker Hub defaults via CLI flags.
+		{
+			name:            "16_to_18_secctx_uid_999",
+			currentVersion:  "16",
+			targetVersion:   "18",
+			extraInitDBArgs: noChecksums,
+			securityContext: &securityContextOpts{
+				runAsUser: 999, runAsGroup: 999, fsGroup: 999, runAsNonRoot: true,
+			},
+		},
 	}
 
 	for _, tc := range cases {
@@ -107,6 +156,16 @@ func testDockerHubSTS(t *testing.T, tc dockerHubUpgradeCase) {
 	if subpath == "" {
 		subpath = defaultSubpath
 	}
+	mountPath := tc.mountPath
+	if mountPath == "" {
+		mountPath = defaultMountPath
+	}
+	sec := tc.securityContext
+	if sec == nil {
+		sec = &securityContextOpts{
+			runAsUser: 999, runAsGroup: 999, fsGroup: 999, runAsNonRoot: true,
+		}
+	}
 
 	ns := fmt.Sprintf("e2e-dh-%s-%d", strings.ReplaceAll(tc.name, "_", "-"), time.Now().UnixNano()%1000000)
 	stsName := "postgres"
@@ -117,10 +176,16 @@ func testDockerHubSTS(t *testing.T, tc dockerHubUpgradeCase) {
 	applyDockerHubSTS(t, ns, dockerHubSTSParams{
 		PostgresVersion: tc.currentVersion,
 		Replicas:        1,
+		MountPath:       mountPath,
 		Subpath:         subpath,
+		RunAsUser:       sec.runAsUser,
+		RunAsGroup:      sec.runAsGroup,
+		FSGroup:         sec.fsGroup,
+		RunAsNonRoot:    sec.runAsNonRoot,
 	})
 	waitForPodReady(t, ns, "app=postgres", 5*time.Minute)
 	pod := firstPodName(t, ns, "app=postgres")
+	assertPodRunsAs(t, ns, pod, sec.runAsUser)
 
 	applySQLFile(t, ns, pod, "postgres", pgPassword, "app", testdataPath(t, "seed.sql"))
 
@@ -138,6 +203,18 @@ func testDockerHubSTS(t *testing.T, tc dockerHubUpgradeCase) {
 	if tc.extraInitDBArgs != "" {
 		args = append(args, "--extra-initdb-args="+tc.extraInitDBArgs)
 	}
+	if tc.securityContext != nil {
+		args = append(args,
+			fmt.Sprintf("--run-as-user-id=%d", sec.runAsUser),
+			fmt.Sprintf("--run-as-group-id=%d", sec.runAsGroup),
+			fmt.Sprintf("--fs-group=%d", sec.fsGroup),
+		)
+		if sec.runAsNonRoot {
+			args = append(args, "--run-as-non-root=true")
+		} else {
+			args = append(args, "--run-as-non-root=false")
+		}
+	}
 	args = append(args, stsName)
 	runUpgradeCLI(t, args...)
 
@@ -145,14 +222,24 @@ func testDockerHubSTS(t *testing.T, tc dockerHubUpgradeCase) {
 	applyDockerHubSTS(t, ns, dockerHubSTSParams{
 		PostgresVersion: tc.targetVersion,
 		Replicas:        0,
+		MountPath:       mountPath,
 		Subpath:         subpath,
+		RunAsUser:       sec.runAsUser,
+		RunAsGroup:      sec.runAsGroup,
+		FSGroup:         sec.fsGroup,
+		RunAsNonRoot:    sec.runAsNonRoot,
 	})
 	kubectl(t, "-n", ns, "scale", "sts/"+stsName, "--replicas=1")
 	kubectl(t, "-n", ns, "rollout", "status", "sts/"+stsName, "--timeout=5m")
 	waitForPodReady(t, ns, "app=postgres", 5*time.Minute)
 	pod = firstPodName(t, ns, "app=postgres")
+	assertPodRunsAs(t, ns, pod, sec.runAsUser)
 
 	out := execPSQL(t, ns, pod, "postgres", pgPassword, "app",
 		"SELECT id, name, note FROM e2e_items ORDER BY id;")
 	require.Equal(t, expectedVerify, strings.TrimSpace(out))
+
+	if tc.securityContext != nil {
+		assertPVCClusterOwnedBy(t, ns, pvcName, subpath, sec.runAsUser)
+	}
 }

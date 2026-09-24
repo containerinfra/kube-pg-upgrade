@@ -158,18 +158,38 @@ func runUpgradeCLI(t *testing.T, args ...string) {
 type dockerHubSTSParams struct {
 	PostgresVersion string
 	Replicas        int32
-	// Subpath is the cluster directory under the PVC mount (PGDATA leaf).
+	// MountPath is where the PVC is mounted. PGDATA is MountPath/Subpath.
+	MountPath string
+	// Subpath is the cluster directory under the PVC mount (and on the PVC).
 	Subpath string
+	// Pod security context (Docker Hub default is 999).
+	RunAsUser    int64
+	RunAsGroup   int64
+	FSGroup      int64
+	RunAsNonRoot bool
 }
 
 // applyDockerHubSTS applies Secret+Service+StatefulSet for official postgres.
-// Mount covers image VOLUME /var/lib/postgresql/data; PGDATA is a subdirectory
+// The PVC is mounted at MountPath; PGDATA is a subdirectory (MountPath/Subpath)
 // so initdb can chmod it (chmod on a volume mount point returns EPERM).
 func applyDockerHubSTS(t *testing.T, namespace string, p dockerHubSTSParams) {
 	t.Helper()
 	require.NotEmpty(t, p.PostgresVersion)
 	require.NotEmpty(t, p.Subpath)
 	require.True(t, p.Replicas == 0 || p.Replicas == 1, "replicas must be 0 or 1")
+	if p.MountPath == "" {
+		p.MountPath = defaultMountPath
+	}
+	if p.RunAsUser == 0 {
+		p.RunAsUser = 999
+	}
+	if p.RunAsGroup == 0 {
+		p.RunAsGroup = 999
+	}
+	if p.FSGroup == 0 {
+		p.FSGroup = 999
+	}
+	pgdata := strings.TrimSuffix(p.MountPath, "/") + "/" + strings.TrimPrefix(p.Subpath, "/")
 
 	manifest := fmt.Sprintf(`apiVersion: v1
 kind: Secret
@@ -210,10 +230,10 @@ spec:
         app: postgres
     spec:
       securityContext:
-        fsGroup: 999
-        runAsUser: 999
-        runAsGroup: 999
-        runAsNonRoot: true
+        fsGroup: %d
+        runAsUser: %d
+        runAsGroup: %d
+        runAsNonRoot: %t
       containers:
         - name: postgres
           image: postgres:%s
@@ -232,12 +252,12 @@ spec:
                   name: postgres-secret
                   key: POSTGRES_DB
             - name: PGDATA
-              value: /var/lib/postgresql/data/%s
+              value: %s
           volumeMounts:
             - name: tmp
               mountPath: /tmp
             - name: data
-              mountPath: /var/lib/postgresql/data
+              mountPath: %s
           readinessProbe:
             exec:
               command: ["pg_isready", "-U", "postgres"]
@@ -258,7 +278,7 @@ spec:
         resources:
           requests:
             storage: 2Gi
-`, p.Replicas, p.PostgresVersion, p.Subpath)
+`, p.Replicas, p.FSGroup, p.RunAsUser, p.RunAsGroup, p.RunAsNonRoot, p.PostgresVersion, pgdata, p.MountPath)
 
 	cmd := exec.Command("kubectl", "-n", namespace, "apply", "-f", "-")
 	cmd.Stdin = strings.NewReader(manifest)
@@ -266,11 +286,74 @@ spec:
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	t.Logf("+ kubectl -n %s apply -f - (postgres:%s replicas=%d subpath=%s)", namespace, p.PostgresVersion, p.Replicas, p.Subpath)
+	t.Logf("+ kubectl -n %s apply -f - (postgres:%s replicas=%d mount=%s pgdata=%s uid=%d)",
+		namespace, p.PostgresVersion, p.Replicas, p.MountPath, pgdata, p.RunAsUser)
 	err := cmd.Run()
 	out := stdout.String() + stderr.String()
 	if strings.TrimSpace(out) != "" {
 		t.Logf("output:\n%s", out)
 	}
 	require.NoError(t, err, out)
+}
+
+func assertPodRunsAs(t *testing.T, namespace, pod string, wantUID int64) {
+	t.Helper()
+	out := kubectl(t, "-n", namespace, "exec", pod, "-c", "postgres", "--", "id", "-u")
+	require.Equal(t, fmt.Sprintf("%d", wantUID), strings.TrimSpace(out), "postgres container UID")
+}
+
+// assertPVCClusterOwnedBy scales the STS down and checks PG_VERSION ownership on the PVC.
+func assertPVCClusterOwnedBy(t *testing.T, namespace, pvcName, subpath string, wantUID int64) {
+	t.Helper()
+	kubectl(t, "-n", namespace, "scale", "sts/postgres", "--replicas=0")
+	kubectl(t, "-n", namespace, "wait", "--for=delete", "pod/postgres-0", "--timeout=2m")
+
+	inspectName := fmt.Sprintf("pvc-owner-%d", time.Now().UnixNano()%100000)
+	manifest := fmt.Sprintf(`apiVersion: v1
+kind: Pod
+metadata:
+  name: %s
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsUser: %d
+    runAsGroup: %d
+    fsGroup: %d
+    runAsNonRoot: true
+  containers:
+    - name: inspect
+      image: busybox:1.36
+      command: ["sh", "-c", "stat -c %%u /data/%s/PG_VERSION"]
+      volumeMounts:
+        - name: data
+          mountPath: /data
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: %s
+`, inspectName, wantUID, wantUID, wantUID, subpath, pvcName)
+
+	cmd := exec.Command("kubectl", "-n", namespace, "apply", "-f", "-")
+	cmd.Stdin = strings.NewReader(manifest)
+	cmd.Env = os.Environ()
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	require.NoError(t, cmd.Run(), stdout.String()+stderr.String())
+
+	deadline := time.Now().Add(2 * time.Minute)
+	var last string
+	for time.Now().Before(deadline) {
+		phase, _ := runCmd(t, "kubectl", "-n", namespace, "get", "pod", inspectName, "-o", "jsonpath={.status.phase}")
+		last = phase
+		if strings.TrimSpace(phase) == "Succeeded" || strings.TrimSpace(phase) == "Failed" {
+			break
+		}
+		time.Sleep(2 * time.Second)
+	}
+	require.Equal(t, "Succeeded", strings.TrimSpace(last), "inspect pod phase")
+	uidOut := kubectl(t, "-n", namespace, "logs", inspectName)
+	require.Equal(t, fmt.Sprintf("%d", wantUID), strings.TrimSpace(uidOut),
+		"upgraded cluster files should be owned by the configured runAsUser")
+	_, _ = runCmd(t, "kubectl", "-n", namespace, "delete", "pod", inspectName, "--wait=false")
 }
