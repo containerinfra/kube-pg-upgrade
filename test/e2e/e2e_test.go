@@ -55,12 +55,16 @@ func TestPGUpgradeE2E(t *testing.T) {
 	noChecksums := "--no-data-checksums"
 
 	cases := []dockerHubUpgradeCase{
-		// Recent major jumps to PG18 (multi-arch upgrade images).
+		// Recent major jumps to PG18.
 		{name: "13_to_18", currentVersion: "13", targetVersion: "18", extraInitDBArgs: noChecksums},
 		{name: "14_to_18", currentVersion: "14", targetVersion: "18", extraInitDBArgs: noChecksums},
 		{name: "15_to_18", currentVersion: "15", targetVersion: "18", extraInitDBArgs: noChecksums},
 		{name: "16_to_18", currentVersion: "16", targetVersion: "18", extraInitDBArgs: noChecksums},
 		{name: "17_to_18", currentVersion: "17", targetVersion: "18", extraInitDBArgs: noChecksums},
+
+		// Older versions
+		{name: "15_to_17", currentVersion: "15", targetVersion: "17"},
+		{name: "16_to_17", currentVersion: "16", targetVersion: "17"},
 
 		// Deployment layout variants.
 		{

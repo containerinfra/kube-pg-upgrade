@@ -107,8 +107,6 @@ helm -n db-upgrade-test upgrade --wait -i test-db \
 
 End-to-end tests drive a local `bin/kube-pg-upgrade` binary against a **kind** cluster. They install Docker Hub Postgres, seed data, run the CLI upgrade, and verify rows survived.
 
-Coverage currently targets **upgrades to Postgres 18 only** (from 13–17), including custom PVC subpaths, alternate mount/`PGDATA` layouts, and security-context flags. On Apple Silicon, cases are skipped when `tianon/postgres-upgrade` has no `linux/arm64` image.
-
 ```bash
 make e2e-kind-up
 make test-e2e
